@@ -24,6 +24,7 @@ moduleFor('service:stripe', 'Unit | Service | stripe', {
     service = StripeService.create({
       stripeConfig: stripe,
       _scriptLoading: true,
+      _stripeScriptPromise: new Ember.RSVP.Promise((resolve) => resolve()),
     });
   },
 
@@ -61,7 +62,8 @@ test('unregisterComponent() unregisters the component', function(assert) {
 test('open() opens Stripe Checkout with correct config options', function(assert) {
   window.StripeCheckout = {
     configure() {},
-    open() {}
+    open() {},
+    close() {},
   };
   const openCheckoutSpy = this.spy();
   const configureCheckoutStub = this.stub(window.StripeCheckout, 'configure');
@@ -74,28 +76,29 @@ test('open() opens Stripe Checkout with correct config options', function(assert
     component: stripeComponent,
   };
 
-  service.open(stripeComponent);
+  service.open(stripeComponent).then(() => {
+    let handlerOptions = {
+      key: config.stripe.key,
+      token: sinon.match.func,
+      opened: sinon.match.func,
+      closed: sinon.match.func,
+    };
+    sinon.assert.calledWith(configureCheckoutStub, sinon.match.object);
+    sinon.assert.calledWith(configureCheckoutStub, sinon.match(handlerOptions));
 
-  let handlerOptions = {
-    key: config.stripe.key,
-    token: sinon.match.func,
-    opened: sinon.match.func,
-    closed: sinon.match.func,
-  };
-  sinon.assert.calledWith(configureCheckoutStub, sinon.match.object);
-  sinon.assert.calledWith(configureCheckoutStub, sinon.match(handlerOptions));
-
-  const stripeOptions = {
-    key: config.stripe.key,
-    name: stripeComponent.get('name'),
-  };
-  assert.ok(openCheckoutSpy.calledWith(stripeOptions), 'opens Stripe checkout with correct config options');
+    const stripeOptions = {
+      key: config.stripe.key,
+      name: stripeComponent.get('name'),
+    };
+    assert.ok(openCheckoutSpy.calledWith(stripeOptions), 'opens Stripe checkout with correct config options');
+  });
 });
 
 test('close() closes Stripe Checkout', function(assert) {
   window.StripeCheckout = {
     configure() {},
-    open() {}
+    open() {},
+    close() {},
   };
   const closeCheckoutSpy = this.spy();
   const configureCheckoutStub = this.stub(window.StripeCheckout, 'configure');
@@ -106,10 +109,18 @@ test('close() closes Stripe Checkout', function(assert) {
   const componentGuid = guidFor(stripeComponent);
   service._alive[componentGuid] = {
     component: stripeComponent,
+    handler: configureCheckoutStub(),
   };
-
 
   service.close(stripeComponent);
 
   assert.ok(closeCheckoutSpy.calledOnce, 'closes Stripe checkout when it is opened');
+});
+
+test('close() does nothing if StripeCheckout is not yet loaded', function(assert) {
+  const componentGuid = guidFor(stripeComponent);
+  service._alive[componentGuid] = {
+    component: stripeComponent,
+  };
+  assert.equal(null, service.close(stripeComponent), 'does not attempt to access StripeCheckout when it is not defined');
 });

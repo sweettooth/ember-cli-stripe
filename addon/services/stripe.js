@@ -47,9 +47,9 @@ export default Service.extend({
    * @public
    */
   open(component) {
-    this._stripeScriptPromise.then(() => {
+    return this._stripeScriptPromise.then(() => {
       let config = this._stripeConfig(component);
-      let stripeHandler = this._stripeHandler(component);
+      let stripeHandler = this._stripeHandler(component) || this._registerNewStripeHandler(component);
       stripeHandler.open(config);
     });
   },
@@ -60,7 +60,10 @@ export default Service.extend({
    */
   close(component) {
     let stripeHandler = this._stripeHandler(component);
-    stripeHandler.close();
+
+    if (stripeHandler) {
+      stripeHandler.close();
+    }
   },
 
   init() {
@@ -98,6 +101,10 @@ export default Service.extend({
     if ('handler' in this._alive[componentGuid]) {
       return this._alive[componentGuid]['handler'];
     }
+  },
+
+  _registerNewStripeHandler(component) {
+    let componentGuid = guidFor(component);
 
     let stripeConfig = this._stripeConfig(component);
     if (!('key' in stripeConfig)) {
